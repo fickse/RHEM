@@ -1,0 +1,40 @@
+! Parameter file for scenario: LH
+! Date built: February 7, 2018, 5:12 pm (Version 2.3) 
+! Parameter units: DIAMS(mm), DENSITY(g/cc),TEMP(deg C) 
+BEGIN GLOBAL 
+		CLEN	=	124.99848 
+		UNITS	=	metric 
+		DIAMS	=	0.002	0.01	0.03	0.3	0.2
+		DENSITY	=	2.6	2.65	1.8	1.6	2.65
+		TEMP	=	40 
+		NELE	=	1 
+END GLOBAL 
+BEGIN PLANE 
+		ID	=	1 
+		LEN	=	49.999392 
+		WIDTH	=	1.000 
+		CHEZY	=	4.0380159619528 
+		RCHEZY	=	4.0380159619528 
+		SL	=	0.001	,	0.3	,	0.001
+		SX	=	0.00	,	0.50	,	1.00 
+		CV	=	1.0000 
+		SAT	=	0.25 
+		PR	=	1 
+		KSS	=	3236.0919116579 
+		KOMEGA	=	0.000007747 
+		KCM	=	0.000299364300 
+		CA	=	1.000 
+		IN	=	0.0000 
+		KE	=	6.7401317298952 
+		G	=	130 
+		DIST	=	0.38 
+		POR	=	0.4306 
+		ROCK	=	0.0000 
+		SMAX	=	1.0000 
+		ADF	=	0.00 
+		ALF	=	0.8000 
+		BARE	= 0 ! INACTIVE 
+		RSP	=	1.000 
+		SPACING	=	1.000 
+		FRACT	=	0.0325	0.0542	0.1801	0.3939	0.3394
+END PLANE 
