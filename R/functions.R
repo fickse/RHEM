@@ -1,3 +1,114 @@
+#' Read output
+#'
+#' @param file path to .out file.
+#' @details creates a temporary '.run' file and executes it
+read.rhem <- function(f) {
+
+	r <- readLines(f)
+	r <- sapply(r, function(x) gsub("(?<=[\\s])\\s*|^\\s+|\\s+$", "", x, perl=TRUE))
+	rr <- lapply(r, function(x) strsplit(x, ' .*?'))
+	x <- lapply(rr, function(x) x[[1]])
+	y <- do.call(rbind, x)
+	namez <- paste0(y[1,], '_', y[2,])
+	y <- y[-c(1,2),]
+	y <- apply(y, 2, as.numeric)
+	y <- as.data.frame(y)
+	names(y) <- namez
+	y
+}
+
+
+
+
+#' Format climate database
+#'
+#' @param data A data.frame.
+#' Run Rhem
+#'
+#' @param parfile path.
+#' @param prefile path.
+#' @param output path.
+#' @param executable path to executable.
+#' @details creates a temporary '.run' file and executes it
+run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanup = TRUE){
+
+	require(raster)
+	
+	#add .sum suffix
+	if(!grepl('[.]sum$', outfile)) outfile <- paste0( gsub('[.]*', '', outfile), '.sum')
+
+	# create .run file
+	runfile <- tempfile()
+	cat(basename(parfile), ', ', basename(prefile), ', ', basename(outfile), ', "Scenario Name",0,2,y,y,n,n,y', # note I can't figure out what all of these parameters are since the documentation is nonexistent.
+	 file = runfile, sep = '')
+	
+	td <- tempdir()
+	file.copy(executable, td)
+	file.copy(parfile, td)
+	file.copy(prefile, td)
+	
+	od <- getwd()
+	setwd(td)
+	command <- paste0(file.path(td, basename(executable)), ' -b ', runfile)
+	resp <- system(command, intern = T)
+	setwd(od)
+	
+	resultsfile <- file.path(td, extension( basename(outfile), '.out'))
+	file.copy(file.path(td, basename(outfile)), dirname(outfile))
+	file.copy(resultsfile, dirname(outfile))
+	
+	r <- read.rhem(resultsfile)
+	
+#	if(cleanup) unlink(td, recursive = TRUE)
+	return( list( tempdir = td, runfile = runfile, outfile = outfile, command = command, resp = resp, out = r))
+
+}
+
+
+
+#' @param outfile target .pre file.
+#' @param ... list of key:value pairs that are written to the header of the file
+#' @return .pre file
+#' @details Input dataframe should have the columns corresponding to the input .pre file, including the following columns:
+#' \describe{
+#'   \item{day}{day of month}
+#'   \item{month}{month}
+#'   \item{year}{year}
+#'   \item{rain}{daily rainfall}
+#'   \item{duration}{duration in hours}
+#'   \item{Tp}{fractional time to peak intensity}
+#'   \item{Ip}{Rainfall intensity at peak (mm / hr)}
+#' }
+createStormFile <- function(data, outfile, ...) {
+	require(gdata)
+	
+	preamble <- list(...)
+	
+	txt <- sapply(names(preamble), function(i) paste0("# ", i, " : ", preamble[[i]]))
+
+	nevents <- nrow(data)
+	
+	txt <- c(txt, paste0( nevents, ' # The number of rain events'))
+	txt <- c(txt, paste0(0, ' # Breakpoint data? (0 for no, 1 for yes'))
+	txt <- c(txt, '#  id     day  month  year  Rain   Dur    Tp     Ip')
+	
+	
+	first <- rep ('    ', nrow(data))
+	id <- sprintf('%-6d', 1:nrow(data))
+	day <-sprintf('%-6d', data$day)
+	month <-sprintf('%-6d', data$month)
+	year <-sprintf('%-6d', data$year)
+	rain <-formatC(data$rain, width = -7, digits = 1, format = 'f')
+	duration <- formatC(data$duration, width = -7, digits = 2, format = 'f')
+	Tp <- formatC(data$Tp, width = -7, digits = 2, format = 'f')
+	Ip <- formatC(data$Ip,  digits = 2, format = 'f')
+	
+	dd <- data.frame(first,id, day, month, year, rain, duration, Tp, Ip)
+	txt2 <- do.call(paste0, dd)
+	
+	writeLines(c(txt,txt2), outfile)
+}
+
 
 
 #' Format Slope parameters
@@ -33,10 +144,10 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
   SX <- c(0, .5, 1)
   }
 
-  SLline <- paste0("\t\tSL\t= ", paste(format(round(SL,2), nsmall = 2), collapse = '\t,\t'))
-  SXline <- paste0("\t\tSX\t= ", paste(format(round(SX,2), nsmall = 2), collapse = '\t,\t'))
+  SLline <- paste0("\t\tSL\t=\t", paste(format(round(SL,2), nsmall = 2), collapse = '\t,\t'))
+  SXline <- paste0("\t\tSX\t=\t", paste(format(round(SX,2), nsmall = 2), collapse = '\t,\t'))
 
-  return( paste0(SLline, '\n', SXline))
+  return( paste0(SLline, '\n', SXline, '\n'))
  }
 
 
@@ -47,23 +158,25 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
 #'
 #' @param ... named arguments. see \code{details}
 #' @details the complete list of input parameters may be found via the \code{\link{par_defaults}} function. Parameters include:
-#'  scenarioname: (defaults to \code{as.numeric(Sys.time())})
-#'  units: 'Metric' or 'English'
-#'  soiltexture: see \code{\link{texture_df}}
-#'  moisturecontent: Initial moisture content % saturation ( default = 25)
-#'  bunchgrasscanopycover: integer (%)
-#'  forbscanopycover: integer (%)
-#'  shrubscanopycover: integer (%)
-#'  sodgrasscanopycover: integer (%)
-#'  rockcover: integer (%)
-#'  basalcover: integer (%)
-#'  littercover: integer (%)
-#'  cryptogamscover: integer (%)
-#'  slopelength : integer (m)
-#'  slopeshape : "uniform", "convex", "concave" or "s-shaped"
-#'  slopesteepness : integer (%)
-#'  version : character (currently no effect)
-#'  OUTPUT_FOLDER : place to save .par file. Defaults to '.'
+#' \describe{
+#'   \item{scenarioname}{ (defaults to \code{as.numeric(Sys.time())})}
+#'   \item{units}{ 'Metric' or 'English' }
+#'   \item{soiltexture}{ see \code{\link{texture_df}} }
+#'   \item{moisturecontent}{ Initial moisture content % saturation ( default = 25)}
+#'   \item{bunchgrasscanopycover}{ integer (%)}
+#'   \item{forbscanopycover}{ integer (%)}
+#'   \item{shrubscanopycover}{ integer (%)}
+#'   \item{sodgrasscanopycover}{ integer (%)}
+#'   \item{rockcover}{ integer (%)}
+#'   \item{basalcover}{ integer (%)}
+#'   \item{littercover}{ integer (%)}
+#'   \item{cryptogamscover}{ integer (%)}
+#'   \item{slopelength }{ integer (m)}
+#'   \item{slopeshape }{ "uniform", "convex", "concave" or "s-shaped"}
+#'   \item{slopesteepness }{ integer (%)}
+#'   \item{version }{ character (currently no effect)}
+#'   \item{OUTPUT_FOLDER}{place to save .par file. Defaults to '.'}
+#' }
 #' @return list of inputs for .par file
 #' @examples
 #' a <- build_par() # defaults
@@ -130,18 +243,18 @@ build_par <- function(...){
 
     ke_parms <- list(
 
-    "Sand" = c(24,0.3483),
-		"Loamy Sand"=c(10 ,0.8755 ),
-		"Sandy Loam"=c(5 ,1.1632 ),
-		"Loam"=c(2.5 ,1.5686 ),
-		"Silt Loam"=c(1.2 ,2.0149 ),
-		"Silt"=c(1.2 ,2.0149 ),
-		"Sandy Clay Loam"=c(0.80 ,2.1691 ),
-		"Clay Loam"=c(0.50 ,2.3026 ),
-		"Silty Clay Loam"=c(0.40 ,2.1691 ),
-		"Sandy Clay"=c(0.30 ,2.1203 ),
-		"Silty Clay"=c(0.25 ,1.7918 ),
-		"Clay"=c(0.2 ,1.3218 )
+		"sand" = c(24,0.3483),
+		"loamy sand"=c(10 ,0.8755 ),
+		"sandy loam"=c(5 ,1.1632 ),
+		"loam"=c(2.5 ,1.5686 ),
+		"silt loam"=c(1.2 ,2.0149 ),
+		"silt"=c(1.2 ,2.0149 ),
+		"sandy clay loam"=c(0.80 ,2.1691 ),
+		"clay loam"=c(0.50 ,2.3026 ),
+		"silty clay loam"=c(0.40 ,2.1691 ),
+		"sandy clay"=c(0.30 ,2.1203 ),
+		"silty clay"=c(0.25 ,1.7918 ),
+		"clay"=c(0.2 ,1.3218 )
 
    )
   ps <- ke_parms[[x$soiltexture]]
@@ -309,49 +422,49 @@ build_par <- function(...){
 		cat(file = x$handle, "! Date built: " , x$timestamp ,  " (Version ", x$modelversion , ") \n", append=TRUE)
 		cat(file = x$handle, "! Parameter units: DIAMS(mm), DENSITY(g/cc),TEMP(deg C) \n", append=TRUE)
 		cat(file = x$handle,"BEGIN GLOBAL \n", append=TRUE)
-		cat(file = x$handle, "		CLEN	=	" , (x$slopelength*2.5) , " \n", append=TRUE) #// The characteristic length of the hillslope in meters or feet
-		cat(file = x$handle, "		UNITS	=	metric \n", append=TRUE)                     #// The units for the length parameter
-		cat(file = x$handle, "		DIAMS	=	" , x$texturerow$clay_diameter,"\t",x$texturerow$silt_diameter,"\t",x$texturerow$small_aggregates_diameter,"\t",x$texturerow$large_aggregates_diameter,"\t",x$texturerow$sand_diameter,"\n", append=TRUE)      #// List of representative soil particle diameters (mm or in) for up to 5 particle classes
-		cat(file = x$handle, "		DENSITY	=	",x$texturerow$clay_specific_gravity,"\t",x$texturerow$silt_specific_gravity,"\t",x$texturerow$small_aggregates_specific_gravity,"\t",x$texturerow$large_aggregates_specific_gravity,"\t",x$texturerow$sand_specific_gravity,"\n", append=TRUE)  #// List of densities (g/cc) corresponding to the above particle classes
-		cat(file = x$handle, "		TEMP	=	40 \n", append=TRUE)                      #// temperature in degrees C
-		cat(file = x$handle, "		NELE	=	1 \n", append=TRUE)                       #// number of hillslope elements (planes)
+		cat(file = x$handle, "\t\tCLEN\t=\t" , (x$slopelength*2.5) , "\n", append=TRUE, sep = '') #// The characteristic length of the hillslope in meters or feet
+		cat(file = x$handle, "\t\tUNITS\t=\tmetric \n", append=TRUE)                     #// The units for the length parameter
+		cat(file = x$handle, "\t\tDIAMS\t=\t" , x$texturerow$clay_diameter,"\t",x$texturerow$silt_diameter,"\t",x$texturerow$small_aggregates_diameter,"\t",x$texturerow$large_aggregates_diameter,"\t",x$texturerow$sand_diameter,"\n", append=TRUE, sep = '')      #// List of representative soil particle diameters (mm or in) for up to 5 particle classes
+		cat(file = x$handle, "\t\tDENSITY\t=\t",x$texturerow$clay_specific_gravity,"\t",x$texturerow$silt_specific_gravity,"\t",x$texturerow$small_aggregates_specific_gravity,"\t",x$texturerow$large_aggregates_specific_gravity,"\t",x$texturerow$sand_specific_gravity,"\n", append=TRUE, sep = '')  #// List of densities (g/cc) corresponding to the above particle classes
+		cat(file = x$handle, "\t\tTEMP\t=\t40 \n", append=TRUE)                      #// temperature in degrees C
+		cat(file = x$handle, "\t\tNELE\t=\t1 \n", append=TRUE)                       #// number of hillslope elements (planes)
 		cat(file = x$handle, "END GLOBAL \n", append=TRUE)
 		cat(file = x$handle, "BEGIN PLANE \n", append=TRUE)
-		cat(file = x$handle, "		ID	=	1 \n", append=TRUE)                           #// identifier for the current plane
+		cat(file = x$handle, "\t\tID\t=\t1 \n", append=TRUE)                           #// identifier for the current plane
 
-		cat(file = x$handle, "		LEN	=	",x$slopelength," \n", append=TRUE)        #// The plane slope length in meters or feet
-		cat(file = x$handle, "		WIDTH	=	1.000 \n", append=TRUE)                   #// The plane bottom width in meters or feet
+		cat(file = x$handle, "\t\tLEN\t=\t",x$slopelength," \n", append=TRUE)        #// The plane slope length in meters or feet
+		cat(file = x$handle, "\t\tWIDTH\t=\t1.000 \n", append=TRUE)                   #// The plane bottom width in meters or feet
 
 		x$chezy = ( (8 * 9.8)/x$ft ) ^ 0.5
 		x$rchezy = ( (8 * 9.8)/x$ft )^ 0.5
 
-		cat(file = x$handle, "		CHEZY	=	",x$chezy," \n", append=TRUE)         #// Overland flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
-		cat(file = x$handle, "		RCHEZY	=	",x$rchezy," \n", append=TRUE)        #// Concentrated flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
+		cat(file = x$handle, "\t\tCHEZY\t=\t",x$chezy," \n", append=TRUE, sep = '')         #// Overland flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
+		cat(file = x$handle, "\t\tRCHEZY\t=\t",x$rchezy," \n", append=TRUE, sep = '')        #// Concentrated flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
 
-		x$slopeParameters = createSlopeParameters(x$units,x$slopelength,x$slopeshape,x$slopesteepness)
+		x$slopeParameters = createSlopeParameters(x$slopeshape,x$slopesteepness)
 		cat(file = x$handle, x$slopeParameters, append=TRUE)                               #// SL: Slope expressed as fractional rise/run
 																         #// SX: Normalized distance
 
-		cat(file = x$handle, "		CV	=	1.0000 \n", append=TRUE)                     #// This is the coefficient of variation for Ke
-		cat(file = x$handle, "		SAT	=	",x$moisturecontent , " \n", append=TRUE)   #// Initial degree of soil saturation, expressed as a fraction of of the pore space filled
-		cat(file = x$handle, "		PR	=	1 \n", append=TRUE)                          #// Print flag
-		cat(file = x$handle, "		KSS	=	" , x$Kss_Final , " \n", append=TRUE)         #// Splash and sheet erodibility coefficient
-		cat(file = x$handle, "		KOMEGA	=	0.000007747 \n", append=TRUE)            #// Undisturbed concentrated erodibility coeff. (s2/m2) value suggested by Nearing 02Jul2014
-		cat(file = x$handle, "		KCM	=	0.000299364300 \n", append=TRUE)             #// Maximum concentrated erodibility coefficient (s2/m2)
-		cat(file = x$handle, "		CA	=	1.000 \n", append=TRUE)                      #// Cover fraction of surface covered by intercepting cover — rainfall intensity is reduced by this fraction until the specified interception depth has accumulated
-		cat(file = x$handle, "		IN	=	0.0000 \n", append=TRUE)                     #// Interception depth in mm or inches
-		cat(file = x$handle, "		KE	=	" , x$weightedKe , " \n", append=TRUE)        #// Effective hydraulic conductivity (mm/h)
-		cat(file = x$handle, "		G	=	" , x$meanmatricpotential , " \n", append=TRUE) #// Mean capillary drive, mm or inches — a zero value sets the infiltration at a constant value of Ke
-		cat(file = x$handle, "		DIST	=	" , x$poresizedistribution , " \n", append=TRUE) #// Pore size distribution index. This parameter is used for redistribution of soil moisture during unponded intervals
-		cat(file = x$handle, "		POR	=	" , x$meanporosity , " \n", append=TRUE)      #//  Porosity
-		cat(file = x$handle, "		ROCK	=	0.0000 \n", append=TRUE)                 #// Volumetric rock fraction, if any. If KE is estimated based on textural class it should be multiplied by (1 - Rock) to reflect this rock volume
-		cat(file = x$handle, "		SMAX	=	1.0000 \n", append=TRUE)                 #// Upper limit to SAT
-		cat(file = x$handle, "		ADF	=	0.00 \n", append=TRUE)                       #// Beta decay factor in the detachement equation in Al-Hamdan et al 2012 (Non-FIRE)
-		cat(file = x$handle, "		ALF	=	0.8000 \n", append=TRUE)                     #// allow variable alfa in the infiltration Smith-Parlange Equation, alf <= 0.05, Green and Ampt
-		cat(file = x$handle, "		BARE	=	0.23 \n", append=TRUE)                   #// Fraction of bare soil to total area. 1 - ground cover ( this will be used if ADF is not 0)
-		cat(file = x$handle, "		RSP	=	1.000 \n", append=TRUE)                      #// Rill spacing in meters or feet
-		cat(file = x$handle, "		SPACING	=	1.000 \n", append=TRUE)		             #// Average micro topographic spacing in meters or feet
-		cat(file = x$handle, "		FRACT	=	" ,  x$texturerow$clay_fraction  , "\t" , x$texturerow$silt_fraction , "\t" , x$texturerow$small_aggregates_fraction , "\t" , x$texturerow$large_aggregates_fraction , "\t" , x$texturerow$sand_fraction , "\n", append=TRUE) #// List of particle class fractions — must sum to one
+		cat(file = x$handle, "\t\tCV\t=\t1.0000 \n", append=TRUE)                     #// This is the coefficient of variation for Ke
+		cat(file = x$handle, "\t\tSAT\t=\t",x$moisturecontent , " \n", append=TRUE)   #// Initial degree of soil saturation, expressed as a fraction of of the pore space filled
+		cat(file = x$handle, "\t\tPR\t=\t1 \n", append=TRUE)                          #// Print flag
+		cat(file = x$handle, "\t\tKSS\t=\t" , x$Kss_Final , " \n", append=TRUE)         #// Splash and sheet erodibility coefficient
+		cat(file = x$handle, "\t\tKOMEGA\t=\t0.000007747 \n", append=TRUE)            #// Undisturbed concentrated erodibility coeff. (s2/m2) value suggested by Nearing 02Jul2014
+		cat(file = x$handle, "\t\tKCM\t=\t0.000299364300 \n", append=TRUE)             #// Maximum concentrated erodibility coefficient (s2/m2)
+		cat(file = x$handle, "\t\tCA\t=\t1.000 \n", append=TRUE)                      #// Cover fraction of surface covered by intercepting cover — rainfall intensity is reduced by this fraction until the specified interception depth has accumulated
+		cat(file = x$handle, "\t\tIN\t=\t0.0000 \n", append=TRUE)                     #// Interception depth in mm or inches
+		cat(file = x$handle, "\t\tKE\t=\t" , x$weightedKe , " \n", append=TRUE)        #// Effective hydraulic conductivity (mm/h)
+		cat(file = x$handle, "\t\tG\t=\t" , x$meanmatricpotential , " \n", append=TRUE) #// Mean capillary drive, mm or inches — a zero value sets the infiltration at a constant value of Ke
+		cat(file = x$handle, "\t\tDIST\t=\t" , x$poresizedistribution , " \n", append=TRUE) #// Pore size distribution index. This parameter is used for redistribution of soil moisture during unponded intervals
+		cat(file = x$handle, "\t\tPOR\t=\t" , x$meanporosity , " \n", append=TRUE)      #//  Porosity
+		cat(file = x$handle, "\t\tROCK\t=\t0.0000 \n", append=TRUE)                 #// Volumetric rock fraction, if any. If KE is estimated based on textural class it should be multiplied by (1 - Rock) to reflect this rock volume
+		cat(file = x$handle, "\t\tSMAX\t=\t1.0000 \n", append=TRUE)                 #// Upper limit to SAT
+		cat(file = x$handle, "\t\tADF\t=\t0.00 \n", append=TRUE)                       #// Beta decay factor in the detachement equation in Al-Hamdan et al 2012 (Non-FIRE)
+		cat(file = x$handle, "\t\tALF\t=\t0.8000 \n", append=TRUE)                     #// allow variable alfa in the infiltration Smith-Parlange Equation, alf <= 0.05, Green and Ampt
+		cat(file = x$handle, "\t\tBARE\t=\t0.23 \n", append=TRUE)                   #// Fraction of bare soil to total area. 1 - ground cover ( this will be used if ADF is not 0)
+		cat(file = x$handle, "\t\tRSP\t=\t1.000 \n", append=TRUE)                      #// Rill spacing in meters or feet
+		cat(file = x$handle, "\t\tSPACING\t=\t1.000 \n", append=TRUE)		             #// Average micro topographic spacing in meters or feet
+		cat(file = x$handle, "\t\tFRACT\t=\t" ,  x$texturerow$clay_fraction  , "\t" , x$texturerow$silt_fraction , "\t" , x$texturerow$small_aggregates_fraction , "\t" , x$texturerow$large_aggregates_fraction , "\t" , x$texturerow$sand_fraction , "\n", append=TRUE) #// List of particle class fractions — must sum to one
 		cat(file = x$handle, "END PLANE \n", append=TRUE)
 
 
