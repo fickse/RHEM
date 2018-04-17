@@ -15,6 +15,28 @@ list of inputs for .par file
 \description{
 Write .par file for input to rhem
 }
+\details{
+the complete list of input parameters may be found via the \code{\link{par_defaults}} function. Parameters include:
+\describe{
+  \item{scenarioname}{ (defaults to \code{as.numeric(Sys.time())})}
+  \item{units}{ 'Metric' or 'English' }
+  \item{soiltexture}{ see \code{\link{texture_df}} }
+  \item{moisturecontent}{ Initial moisture content \% saturation ( default = 25)}
+  \item{bunchgrasscanopycover}{ integer (\%)}
+  \item{forbscanopycover}{ integer (\%)}
+  \item{shrubscanopycover}{ integer (\%)}
+  \item{sodgrasscanopycover}{ integer (\%)}
+  \item{rockcover}{ integer (\%)}
+  \item{basalcover}{ integer (\%)}
+  \item{littercover}{ integer (\%)}
+  \item{cryptogamscover}{ integer (\%)}
+  \item{slopelength }{ integer (m)}
+  \item{slopeshape }{ "uniform", "convex", "concave" or "s-shaped"}
+  \item{slopesteepness }{ integer (\%)}
+  \item{version }{ character (currently no effect)}
+  \item{OUTPUT_FOLDER}{place to save .par file. Defaults to '.'}
+}
+}
 \examples{
 a <- build_par() # defaults
 a

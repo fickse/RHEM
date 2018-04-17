@@ -33,7 +33,7 @@ read.rhem <- function(f) {
 run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanup = TRUE){
 
 	require(raster)
-	
+
 	#add .sum suffix
 	if(!grepl('[.]sum$', outfile)) outfile <- paste0( gsub('[.]*', '', outfile), '.sum')
 
@@ -41,31 +41,32 @@ run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanu
 	runfile <- tempfile()
 	cat(basename(parfile), ', ', basename(prefile), ', ', basename(outfile), ', "Scenario Name",0,2,y,y,n,n,y', # note I can't figure out what all of these parameters are since the documentation is nonexistent.
 	 file = runfile, sep = '')
-	
+
 	td <- tempdir()
 	file.copy(executable, td)
 	file.copy(parfile, td)
 	file.copy(prefile, td)
-	
+
 	od <- getwd()
 	setwd(td)
 	command <- paste0(file.path(td, basename(executable)), ' -b ', runfile)
 	resp <- system(command, intern = T)
 	setwd(od)
-	
+
 	resultsfile <- file.path(td, extension( basename(outfile), '.out'))
 	file.copy(file.path(td, basename(outfile)), dirname(outfile))
 	file.copy(resultsfile, dirname(outfile))
-	
+
 	r <- read.rhem(resultsfile)
-	
+
 #	if(cleanup) unlink(td, recursive = TRUE)
 	return( list( tempdir = td, runfile = runfile, outfile = outfile, command = command, resp = resp, out = r))
 
 }
 
 
-
+#' Create Storm File
+#'
 #' @param outfile target .pre file.
 #' @param ... list of key:value pairs that are written to the header of the file
 #' @return .pre file
@@ -81,18 +82,18 @@ run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanu
 #' }
 createStormFile <- function(data, outfile, ...) {
 	require(gdata)
-	
+
 	preamble <- list(...)
-	
+
 	txt <- sapply(names(preamble), function(i) paste0("# ", i, " : ", preamble[[i]]))
 
 	nevents <- nrow(data)
-	
+
 	txt <- c(txt, paste0( nevents, ' # The number of rain events'))
 	txt <- c(txt, paste0(0, ' # Breakpoint data? (0 for no, 1 for yes'))
 	txt <- c(txt, '#  id     day  month  year  Rain   Dur    Tp     Ip')
-	
-	
+
+
 	first <- rep ('    ', nrow(data))
 	id <- sprintf('%-6d', 1:nrow(data))
 	day <-sprintf('%-6d', data$day)
@@ -102,10 +103,10 @@ createStormFile <- function(data, outfile, ...) {
 	duration <- formatC(data$duration, width = -7, digits = 2, format = 'f')
 	Tp <- formatC(data$Tp, width = -7, digits = 2, format = 'f')
 	Ip <- formatC(data$Ip,  digits = 2, format = 'f')
-	
+
 	dd <- data.frame(first,id, day, month, year, rain, duration, Tp, Ip)
 	txt2 <- do.call(paste0, dd)
-	
+
 	writeLines(c(txt,txt2), outfile)
 }
 
@@ -162,18 +163,18 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
 #'   \item{scenarioname}{ (defaults to \code{as.numeric(Sys.time())})}
 #'   \item{units}{ 'Metric' or 'English' }
 #'   \item{soiltexture}{ see \code{\link{texture_df}} }
-#'   \item{moisturecontent}{ Initial moisture content % saturation ( default = 25)}
-#'   \item{bunchgrasscanopycover}{ integer (%)}
-#'   \item{forbscanopycover}{ integer (%)}
-#'   \item{shrubscanopycover}{ integer (%)}
-#'   \item{sodgrasscanopycover}{ integer (%)}
-#'   \item{rockcover}{ integer (%)}
-#'   \item{basalcover}{ integer (%)}
-#'   \item{littercover}{ integer (%)}
-#'   \item{cryptogamscover}{ integer (%)}
+#'   \item{moisturecontent}{ Initial moisture content \% saturation ( default = 25)}
+#'   \item{bunchgrasscanopycover}{ integer (\%)}
+#'   \item{forbscanopycover}{ integer (\%)}
+#'   \item{shrubscanopycover}{ integer (\%)}
+#'   \item{sodgrasscanopycover}{ integer (\%)}
+#'   \item{rockcover}{ integer (\%)}
+#'   \item{basalcover}{ integer (\%)}
+#'   \item{littercover}{ integer (\%)}
+#'   \item{cryptogamscover}{ integer (\%)}
 #'   \item{slopelength }{ integer (m)}
 #'   \item{slopeshape }{ "uniform", "convex", "concave" or "s-shaped"}
-#'   \item{slopesteepness }{ integer (%)}
+#'   \item{slopesteepness }{ integer (\%)}
 #'   \item{version }{ character (currently no effect)}
 #'   \item{OUTPUT_FOLDER}{place to save .par file. Defaults to '.'}
 #' }
