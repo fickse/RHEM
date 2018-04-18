@@ -5,6 +5,7 @@
 read.rhem <- function(f) {
 
 	r <- readLines(f)
+	if(length(r) < 3) stop( 'no data in file ', f )
 	r <- sapply(r, function(x) gsub("(?<=[\\s])\\s*|^\\s+|\\s+$", "", x, perl=TRUE))
 	rr <- lapply(r, function(x) strsplit(x, ' .*?'))
 	x <- lapply(rr, function(x) x[[1]])
@@ -38,7 +39,8 @@ run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanu
 	if(!grepl('[.]sum$', outfile)) outfile <- paste0( gsub('[.]*', '', outfile), '.sum')
 
 	# create .run file
-	runfile <- tempfile()
+	runfile <- extension(basename(outfile), 'run')
+	runfile <- file.path(tempdir(), runfile)
 	cat(basename(parfile), ', ', basename(prefile), ', ', basename(outfile), ', "Scenario Name",0,2,y,y,n,n,y', # note I can't figure out what all of these parameters are since the documentation is nonexistent.
 	 file = runfile, sep = '')
 
@@ -425,8 +427,20 @@ build_par <- function(...){
 		cat(file = x$handle,"BEGIN GLOBAL \n", append=TRUE)
 		cat(file = x$handle, "\t\tCLEN\t=\t" , (x$slopelength*2.5) , "\n", append=TRUE, sep = '') #// The characteristic length of the hillslope in meters or feet
 		cat(file = x$handle, "\t\tUNITS\t=\tmetric \n", append=TRUE)                     #// The units for the length parameter
-		cat(file = x$handle, "\t\tDIAMS\t=\t" , x$texturerow$clay_diameter,"\t",x$texturerow$silt_diameter,"\t",x$texturerow$small_aggregates_diameter,"\t",x$texturerow$large_aggregates_diameter,"\t",x$texturerow$sand_diameter,"\n", append=TRUE, sep = '')      #// List of representative soil particle diameters (mm or in) for up to 5 particle classes
-		cat(file = x$handle, "\t\tDENSITY\t=\t",x$texturerow$clay_specific_gravity,"\t",x$texturerow$silt_specific_gravity,"\t",x$texturerow$small_aggregates_specific_gravity,"\t",x$texturerow$large_aggregates_specific_gravity,"\t",x$texturerow$sand_specific_gravity,"\n", append=TRUE, sep = '')  #// List of densities (g/cc) corresponding to the above particle classes
+		cat(file = x$handle, "\t\tDIAMS\t=\t" , 
+			format(x$texturerow$clay_diameter, scientific = FALSE),"\t",
+			format(x$texturerow$silt_diameter, scientific = FALSE),"\t",
+			format(x$texturerow$small_aggregates_diameter, scientific = FALSE),"\t",
+			format(x$texturerow$large_aggregates_diameter, scientific = FALSE),"\t",
+			format(x$texturerow$sand_diameter, scientific = FALSE),
+			"\n", append=TRUE, sep = '')      #// List of representative soil particle diameters (mm or in) for up to 5 particle classes
+		cat(file = x$handle, "\t\tDENSITY\t=\t",
+			format(x$texturerow$clay_specific_gravity, scientific = FALSE),"\t",
+			format(x$texturerow$silt_specific_gravity, scientific = FALSE),"\t",
+			format(x$texturerow$small_aggregates_specific_gravity, scientific = FALSE),"\t",
+			format(x$texturerow$large_aggregates_specific_gravity, scientific = FALSE),"\t",
+			format(x$texturerow$sand_specific_gravity, scientific = FALSE),
+			"\n", append=TRUE, sep = '')  #// List of densities (g/cc) corresponding to the above particle classes
 		cat(file = x$handle, "\t\tTEMP\t=\t40 \n", append=TRUE)                      #// temperature in degrees C
 		cat(file = x$handle, "\t\tNELE\t=\t1 \n", append=TRUE)                       #// number of hillslope elements (planes)
 		cat(file = x$handle, "END GLOBAL \n", append=TRUE)
@@ -439,8 +453,8 @@ build_par <- function(...){
 		x$chezy = ( (8 * 9.8)/x$ft ) ^ 0.5
 		x$rchezy = ( (8 * 9.8)/x$ft )^ 0.5
 
-		cat(file = x$handle, "\t\tCHEZY\t=\t",x$chezy," \n", append=TRUE, sep = '')         #// Overland flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
-		cat(file = x$handle, "\t\tRCHEZY\t=\t",x$rchezy," \n", append=TRUE, sep = '')        #// Concentrated flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
+		cat(file = x$handle, "\t\tCHEZY\t=\t", format(x$chezy, scientific=FALSE)," \n",  append=TRUE, sep = '')         #// Overland flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
+		cat(file = x$handle, "\t\tRCHEZY\t=\t", format(x$rchezy, scientific=FALSE)," \n", append=TRUE, sep = '')        #// Concentrated flow Chezy Coeff. (m^(1/2)/s) (square root meter per second)
 
 		x$slopeParameters = createSlopeParameters(x$slopeshape,x$slopesteepness)
 		cat(file = x$handle, x$slopeParameters, append=TRUE)                               #// SL: Slope expressed as fractional rise/run
@@ -449,15 +463,15 @@ build_par <- function(...){
 		cat(file = x$handle, "\t\tCV\t=\t1.0000 \n", append=TRUE)                     #// This is the coefficient of variation for Ke
 		cat(file = x$handle, "\t\tSAT\t=\t",x$moisturecontent , " \n", append=TRUE)   #// Initial degree of soil saturation, expressed as a fraction of of the pore space filled
 		cat(file = x$handle, "\t\tPR\t=\t1 \n", append=TRUE)                          #// Print flag
-		cat(file = x$handle, "\t\tKSS\t=\t" , x$Kss_Final , " \n", append=TRUE)         #// Splash and sheet erodibility coefficient
+		cat(file = x$handle, "\t\tKSS\t=\t" , format(x$Kss_Final, scientific=FALSE) , " \n", append=TRUE)         #// Splash and sheet erodibility coefficient
 		cat(file = x$handle, "\t\tKOMEGA\t=\t0.000007747 \n", append=TRUE)            #// Undisturbed concentrated erodibility coeff. (s2/m2) value suggested by Nearing 02Jul2014
 		cat(file = x$handle, "\t\tKCM\t=\t0.000299364300 \n", append=TRUE)             #// Maximum concentrated erodibility coefficient (s2/m2)
 		cat(file = x$handle, "\t\tCA\t=\t1.000 \n", append=TRUE)                      #// Cover fraction of surface covered by intercepting cover — rainfall intensity is reduced by this fraction until the specified interception depth has accumulated
 		cat(file = x$handle, "\t\tIN\t=\t0.0000 \n", append=TRUE)                     #// Interception depth in mm or inches
-		cat(file = x$handle, "\t\tKE\t=\t" , x$weightedKe , " \n", append=TRUE)        #// Effective hydraulic conductivity (mm/h)
-		cat(file = x$handle, "\t\tG\t=\t" , x$meanmatricpotential , " \n", append=TRUE) #// Mean capillary drive, mm or inches — a zero value sets the infiltration at a constant value of Ke
-		cat(file = x$handle, "\t\tDIST\t=\t" , x$poresizedistribution , " \n", append=TRUE) #// Pore size distribution index. This parameter is used for redistribution of soil moisture during unponded intervals
-		cat(file = x$handle, "\t\tPOR\t=\t" , x$meanporosity , " \n", append=TRUE)      #//  Porosity
+		cat(file = x$handle, "\t\tKE\t=\t" , format(x$weightedKe, scientific=FALSE) , " \n", append=TRUE)        #// Effective hydraulic conductivity (mm/h)
+		cat(file = x$handle, "\t\tG\t=\t" , format(x$meanmatricpotential, scientific=FALSE) , " \n", append=TRUE) #// Mean capillary drive, mm or inches — a zero value sets the infiltration at a constant value of Ke
+		cat(file = x$handle, "\t\tDIST\t=\t" , format(x$poresizedistribution, scientific=FALSE) , " \n", append=TRUE) #// Pore size distribution index. This parameter is used for redistribution of soil moisture during unponded intervals
+		cat(file = x$handle, "\t\tPOR\t=\t" , format(x$meanporosity, scientific=FALSE) , " \n", append=TRUE)      #//  Porosity
 		cat(file = x$handle, "\t\tROCK\t=\t0.0000 \n", append=TRUE)                 #// Volumetric rock fraction, if any. If KE is estimated based on textural class it should be multiplied by (1 - Rock) to reflect this rock volume
 		cat(file = x$handle, "\t\tSMAX\t=\t1.0000 \n", append=TRUE)                 #// Upper limit to SAT
 		cat(file = x$handle, "\t\tADF\t=\t0.00 \n", append=TRUE)                       #// Beta decay factor in the detachement equation in Al-Hamdan et al 2012 (Non-FIRE)
@@ -465,7 +479,13 @@ build_par <- function(...){
 		cat(file = x$handle, "\t\tBARE\t=\t0.23 \n", append=TRUE)                   #// Fraction of bare soil to total area. 1 - ground cover ( this will be used if ADF is not 0)
 		cat(file = x$handle, "\t\tRSP\t=\t1.000 \n", append=TRUE)                      #// Rill spacing in meters or feet
 		cat(file = x$handle, "\t\tSPACING\t=\t1.000 \n", append=TRUE)		             #// Average micro topographic spacing in meters or feet
-		cat(file = x$handle, "\t\tFRACT\t=\t" ,  x$texturerow$clay_fraction  , "\t" , x$texturerow$silt_fraction , "\t" , x$texturerow$small_aggregates_fraction , "\t" , x$texturerow$large_aggregates_fraction , "\t" , x$texturerow$sand_fraction , "\n", append=TRUE) #// List of particle class fractions — must sum to one
+		cat(file = x$handle, "\t\tFRACT\t=\t" ,
+							format(x$texturerow$clay_fraction, scientific=FALSE)  , "\t" ,
+							format(x$texturerow$silt_fraction, scientific=FALSE) , "\t" , 
+							format(x$texturerow$small_aggregates_fraction, scientific=FALSE) , "\t" ,
+							format(x$texturerow$large_aggregates_fraction, scientific=FALSE) , "\t" ,
+							format(x$texturerow$sand_fraction, scientific=FALSE) , 
+							"\n", append=TRUE) #// List of particle class fractions — must sum to one
 		cat(file = x$handle, "END PLANE \n", append=TRUE)
 
 
