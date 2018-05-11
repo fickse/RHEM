@@ -46,8 +46,8 @@ run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanu
 
 	td <- tempdir()
 	file.copy(executable, td)
-	file.copy(parfile, td)
-	file.copy(prefile, td)
+	file.copy(parfile, td, overwrite=TRUE)
+	file.copy(prefile, td, overwrite = TRUE)
 
 	od <- getwd()
 	setwd(td)
@@ -56,8 +56,8 @@ run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanu
 	setwd(od)
 
 	resultsfile <- file.path(td, extension( basename(outfile), '.out'))
-	file.copy(file.path(td, basename(outfile)), dirname(outfile))
-	file.copy(resultsfile, dirname(outfile))
+	file.copy(file.path(td, basename(outfile)), dirname(outfile), overwrite = TRUE)
+	file.copy(resultsfile, dirname(outfile), overwrite = TRUE)
 
 	r <- read.rhem(resultsfile)
 
@@ -147,8 +147,8 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
   SX <- c(0, .5, 1)
   }
 
-  SLline <- paste0("\t\tSL\t=\t", paste(format(round(SL,2), nsmall = 2), collapse = '\t,\t'))
-  SXline <- paste0("\t\tSX\t=\t", paste(format(round(SX,2), nsmall = 2), collapse = '\t,\t'))
+  SLline <- paste0("\t\tSL\t=\t", paste(format(round(SL,3), nsmall = 3), collapse = '\t,\t'))
+  SXline <- paste0("\t\tSX\t=\t", paste(format(round(SX,3), nsmall = 3), collapse = '\t,\t'))
 
   return( paste0(SLline, '\n', SXline, '\n'))
  }
