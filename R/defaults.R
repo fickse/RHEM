@@ -34,7 +34,7 @@ par_defaults <- function() {
 #' texture_df()
 texture_df <- function(){
 
-	structure(list(class = c("clay", "clay loam", "loam", "Loamy Sand", 
+	structure(list(class = c("clay", "clay loam", "loam", "loamy Sand", 
 	"sand", "sandy clay", "sandy clay loam", "sandy loam", "silt", 
 	"silt loam", "silty clay", "silty clay loam"), clay_diameter = c(0.002, 
 	0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 

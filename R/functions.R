@@ -26,45 +26,72 @@ read.rhem <- function(f) {
 #' @param data A data.frame.
 #' Run Rhem
 #'
-#' @param parfile path.
+#' @param parlist path.
 #' @param prefile path.
 #' @param output path.
 #' @param executable path to executable.
 #' @details creates a temporary '.run' file and executes it
-run_rhem <- function( parfile, prefile, executable, outfile = tempfile(), cleanup = TRUE){
+run_rhem <- function( parlist, prefile, exe, cleanup = TRUE){
 
 	require(raster)
 
 	#add .sum suffix
-	if(!grepl('[.]sum$', outfile)) outfile <- paste0( gsub('[.]*', '', outfile), '.sum')
+#	if(!grepl('[.]sum$', outfile)) outfile <- paste0( gsub('[.]*', '', outfile), '.sum')
+
+   #outfile <- file.path(parlist$OUTPUT_FOLDER, paste0(parlist$
+
+    outfile <- gsub('[.]par', '.sum', parlist$soilFileName)
 
 	# create .run file
 	runfile <- extension(basename(outfile), 'run')
-	runfile <- file.path(tempdir(), runfile)
-	cat(basename(parfile), ', ', basename(prefile), ', ', basename(outfile), ', "Scenario Name",0,2,y,y,n,n,y', # note I can't figure out what all of these parameters are since the documentation is nonexistent.
+	#runfile <- file.path(tempdir(), runfile)
+	cat(parlist$soilFileName, ', ', prefile, ', ', basename(outfile), ', "Scenario Name",0,2,y,y,n,n,y', # note I can't figure out what all of these parameters are since the documentation is nonexistent.
 	 file = runfile, sep = '')
 
-	td <- tempdir()
-	file.copy(executable, td)
-	file.copy(parfile, td, overwrite=TRUE)
-	file.copy(prefile, td, overwrite = TRUE)
+#	td <- tempdir()
+#	file.copy(executable, td)
+#	file.copy(parlist, td, overwrite=TRUE)
+#	file.copy(prefile, td, overwrite = TRUE)
 
-	od <- getwd()
-	setwd(td)
-	command <- paste0(file.path(td, basename(executable)), ' -b ', runfile)
+#	od <- getwd()
+#	setwd(td)
+#	command <- paste0(file.path(td, basename(executable)), ' -b ', runfile)
+	command <- paste0(exe, ' -b ', runfile)
 	resp <- system(command, intern = T)
-	setwd(od)
+#	setwd(od)
 
-	resultsfile <- file.path(td, extension( basename(outfile), '.out'))
-	file.copy(file.path(td, basename(outfile)), dirname(outfile), overwrite = TRUE)
-	file.copy(resultsfile, dirname(outfile), overwrite = TRUE)
+#	resultsfile <- file.path(td, extension( basename(outfile), '.out'))
+#	file.copy(file.path(td, basename(outfile)), dirname(outfile), overwrite = TRUE)
+#	file.copy(resultsfile, dirname(outfile), overwrite = TRUE)
 
-	r <- read.rhem(resultsfile)
+    ff <- list.files(pattern = gsub('[.]sum', '', basename(outfile)))
 
+	r <- read.rhem(grep('out', ff, value = TRUE))
+
+    a <- get_rhem_sums(basename(outfile))
+
+
+    file.rename(ff, file.path(parlist$OUTPUT_FOLDER, ff))
 #	if(cleanup) unlink(td, recursive = TRUE)
-	return( list( tempdir = td, runfile = runfile, outfile = outfile, command = command, resp = resp, out = r))
+	return( list(averages = a, runfile = runfile, outfile = outfile, command = command, resp = resp, out = r))
 
 }
+
+#' Parse .sum file
+#'
+#' @param sumfile path to .sum output
+get_rhem_sums <- function(sumfile){
+
+    v <- readLines(sumfile)
+    out <- list(
+    avg_runoff_mm_yr = gsub( '.* ', '', grep('Avg-Runoff[(]mm/year[)]=', v, value = TRUE)),
+    avg_loss_tn_ha_yr = gsub( '.* ', '', grep('Avg-Soil-Loss[(]ton/ha/year[)]=', v, value = TRUE)),
+    avg_yield_tn_ha_yr = gsub( '.* ', '', grep('Avg-SY[(]ton/ha/year[)]=', v, value = TRUE))
+    )
+    return(out)
+
+}
+
 
 
 #' Create Storm File
@@ -179,6 +206,7 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
 #'   \item{slopesteepness }{ integer (\%)}
 #'   \item{version }{ character (currently no effect)}
 #'   \item{OUTPUT_FOLDER}{place to save .par file. Defaults to '.'}
+#'   \item{prefix}{optional prefix for output files}
 #' }
 #' @return list of inputs for .par file
 #' @examples
@@ -186,22 +214,36 @@ createSlopeParameters <- function(slopeshape,slopesteepness){
 #' a
 #' unlink(a$handle)
 #'
-build_par <- function(...){
+build_par <- function(mylist){
 
-  y <- list(...)
+  # y <- list(...)
+  y <- mylist
 
   x <- par_defaults()
 
   for( n in names(y)){
 
-    if (! n %in% names(x)) stop('variable name ', n, ' not recognized. See parameter defaults with par_defaults')
+    if (! n %in% names(x)) warning('variable name ', n, ' not recognized. See parameter defaults with par_defaults')
 
     x[[n]] <- y[[n]]
 
   }
 
+  if(is.null(x$prefix)){ x$prefix <- "scenario_input_" }
+
   # quality control checks here...
 
+        #coerce to numeric
+        nums <- c('slopelength', 'slopesteepness','bunchtrasscanopycover','forbscanopycover','shrubscanopycover','sodgrasscanopycover','totalcanopycover','rockcover', 'basalcover','littercover','cryptogamscover')
+
+        for(n in nums){
+
+            x[[n]] <- as.numeric(x[[n]])
+
+        }
+
+        x$slopeshape <- tolower(x$slopeshape)
+        x$soiltexture <- tolower(x$soiltexture)
 
 		# convert to percent values
 		x$bunchgrasscanopycover = x$bunchgrasscanopycover/100
@@ -412,7 +454,7 @@ build_par <- function(...){
 		}
 
 		#// Set working directory and file name
-		x$soilFileName = file.path( x$OUTPUT_FOLDER , paste0( "scenario_input_" , x$scenarioname , ".par"))
+		x$soilFileName = file.path( x$OUTPUT_FOLDER , paste0( x$prefix , x$scenarioname , ".par"))
 
 		#// Write to soil log file
     x$handle = x$soilFileName
@@ -427,7 +469,7 @@ build_par <- function(...){
 		cat(file = x$handle,"BEGIN GLOBAL \n", append=TRUE)
 		cat(file = x$handle, "\t\tCLEN\t=\t" , (x$slopelength*2.5) , "\n", append=TRUE, sep = '') #// The characteristic length of the hillslope in meters or feet
 		cat(file = x$handle, "\t\tUNITS\t=\tmetric \n", append=TRUE)                     #// The units for the length parameter
-		cat(file = x$handle, "\t\tDIAMS\t=\t" , 
+		cat(file = x$handle, "\t\tDIAMS\t=\t" ,
 			format(x$texturerow$clay_diameter, scientific = FALSE),"\t",
 			format(x$texturerow$silt_diameter, scientific = FALSE),"\t",
 			format(x$texturerow$small_aggregates_diameter, scientific = FALSE),"\t",
@@ -481,10 +523,10 @@ build_par <- function(...){
 		cat(file = x$handle, "\t\tSPACING\t=\t1.000 \n", append=TRUE)		             #// Average micro topographic spacing in meters or feet
 		cat(file = x$handle, "\t\tFRACT\t=\t" ,
 							format(x$texturerow$clay_fraction, scientific=FALSE)  , "\t" ,
-							format(x$texturerow$silt_fraction, scientific=FALSE) , "\t" , 
+							format(x$texturerow$silt_fraction, scientific=FALSE) , "\t" ,
 							format(x$texturerow$small_aggregates_fraction, scientific=FALSE) , "\t" ,
 							format(x$texturerow$large_aggregates_fraction, scientific=FALSE) , "\t" ,
-							format(x$texturerow$sand_fraction, scientific=FALSE) , 
+							format(x$texturerow$sand_fraction, scientific=FALSE) ,
 							"\n", append=TRUE) #// List of particle class fractions — must sum to one
 		cat(file = x$handle, "END PLANE \n", append=TRUE)
 
@@ -493,6 +535,98 @@ build_par <- function(...){
 	}
 
 
+#' Run RHEM in batch mode from excel
+#'
+#' @param xlsfile An excel file with a tab named 'Inputs'
+#' @param output folder to save outputs
+#' @param exe path to executable
+#' @param clifile path to storm file
+#' @param ... named arguments to override batchfile properties
+#' @details Function will look for rhem executable in same folder as xlsfile.
+#' @examples
+#' rhem_batch('RHEM_Template.xlsx')
+rhem_batch <- function(xlsfile, output = './output', exe ='', cliFile ='', ...){
+    require(readxl)
+
+    xtras <- list(...)
+
+    #checks
+
+    if(!dir.exists(output)) dir.create(output, recursive = TRUE)
+
+    if(exe == '') {
+        exe <- list.files(pattern = 'rhem.*?exe')[1]
+    }
+
+    if(!file.exists(exe)){
+        stop( 'cant find rhem executable ', exe )
+    }
+
+    if(!file.exists(cliFile)){
+        stop( 'cant find cliFile ', cliFile )
+    }
+
+    # read template file
+    sh <- excel_sheets(xlsfile)
+
+    input <- grep('Inputs', sh)
+
+    if(length(input) == 0 | length(input) > 1){
+        stop('Cant find single tab in ', xlsfile, ' named "Inputs" ')
+    }
+
+    dat <- read_excel(xlsfile, sheet = input)
+    dat <- as.data.frame(dat)
+
+    # loop through rows, generating PAR files
+      # then running and saving the outputs
+
+    setname <- function(x, old, new){ names(x)[which(names(x) == old)] <- new; x }
+
+    Z <- list()
+
+    for( r in 1:nrow(dat) ){
+
+        x <- dat[r,]
+
+        x <- setname(x, "Scenario Name", "scenarioname")
+        x <- setname(x, "Units", "units")
+        x <- setname(x, "Soil Texture", "soiltexture")
+        x <- setname(x, "Slope Length (meters)", "slopelength")
+        x <- setname(x, "Slope Shape (Uniform, S-Shaped, Convex, Concave)", "slopeshape")
+        x <- setname(x, "Slope Steepness ( % )", "slopesteepness")
+        x <- setname(x, "Bunch Grass ( % )", "bunchgrasscanopycover")
+        x <- setname(x, "Forbs/Annuals ( %)", "forbscanopycover")
+        x <- setname(x, "Shrubs ( % )", "shrubscanopycover")
+        x <- setname(x, "Sod Grass (%)", "sodgrasscanopycover")
+        x <- setname(x, "Basal Plant Cover ( % )", "basalcover")
+        x <- setname(x, "Rock Cover ( % )", "rockcover")
+        x <- setname(x, "Litter Cover  ( % )", "littercover")
+        x <- setname(x, "Biological Crusts Cover            ( % )", "cryptogamscover")
+
+        for(j in names(xtras)){
+            x[[j]] <- xtras[[j]]
+        }
+
+        x$OUTPUT_FOLDER <- output
+
+        p <- build_par(x)
+
+        # now fit
+        cat('running ', p$soilFileName, '\n'); flush.console()
+        result <- run_rhem(p, cliFile, exe, output)
+        cat(result$resp, '\n'); flush.console()
 
 
+        dat[r,"Avg Runoff (mm/year)"] <- result$averages[[1]]
+        dat[r,"Avg Soil Loss (ton/ha/year)"] <- result$averages[[2]]
+        dat[r,"Avg SY (ton/ha/year)"] <- result$averages[[3]]
+
+        Z[[r]] <- result
+    }
+
+    write.csv( dat, file.path(dirname(outfile), paste0('output_',p$prefix, '.csv')), row.names = F)
+    return(Z)
+
+}
 
